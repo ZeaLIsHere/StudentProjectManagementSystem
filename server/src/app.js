@@ -44,6 +44,10 @@ app.use('/api', apiLimiter);
 // Serve uploaded files
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 
+app.get('/api/health', (req, res) => {
+  res.json({ success: true, message: 'SPMS API is running' });
+});
+
 app.use('/api/auth', authRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api', taskRoutes);
@@ -51,10 +55,6 @@ app.use('/api/kanban', kanbanRoutes);
 app.use('/api/heatmap', heatmapRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/users', userRoutes);
-
-app.get('/api/health', (req, res) => {
-  res.json({ success: true, message: 'SPMS API is running' });
-});
 
 app.use(errorHandler);
 
