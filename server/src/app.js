@@ -23,6 +23,9 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
+// Trust proxy is required for express-rate-limit to work correctly behind Vercel proxy
+app.set('trust proxy', 1);
+
 // Database connection middleware for serverless
 app.use(async (req, res, next) => {
   try {
