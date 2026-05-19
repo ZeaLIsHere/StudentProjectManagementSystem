@@ -45,10 +45,7 @@ app.use(cookieParser());
 app.use('/api', apiLimiter);
 
 // Serve uploaded files
-const uploadsPath = process.env.NODE_ENV === 'production'
-  ? '/tmp/uploads'
-  : path.join(__dirname, '..', 'uploads');
-app.use('/uploads', express.static(uploadsPath));
+app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 
 app.get('/api/health', (req, res) => {
   res.json({ success: true, message: 'SPMS API is running' });
