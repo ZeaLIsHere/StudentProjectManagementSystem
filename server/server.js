@@ -14,9 +14,11 @@ if (!fs.existsSync('uploads')) {
   fs.mkdirSync('uploads', { recursive: true });
 }
 
-// Connect database
-connectDB();
-initFirebase();
+// Only connect dynamically in serverless or on port listen
+if (!process.env.VERCEL) {
+  connectDB();
+  initFirebase();
+}
 
 // Only listen on port if not running on Vercel serverless
 if (!process.env.VERCEL) {
