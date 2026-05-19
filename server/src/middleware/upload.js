@@ -2,19 +2,9 @@ import multer from 'multer';
 import path from 'path';
 import crypto from 'crypto';
 
-import fs from 'fs';
-
-const isProduction = process.env.NODE_ENV === 'production';
-const uploadDir = isProduction ? '/tmp/uploads' : 'uploads/';
-
-// Ensure upload directory exists
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
-
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, uploadDir);
+    cb(null, 'uploads/');
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = crypto.randomBytes(8).toString('hex');
