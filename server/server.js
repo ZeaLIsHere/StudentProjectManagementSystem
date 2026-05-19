@@ -14,14 +14,16 @@ if (!fs.existsSync('uploads')) {
   fs.mkdirSync('uploads', { recursive: true });
 }
 
-const startServer = async () => {
-  await connectDB();
-  initFirebase();
-  startDeadlineScheduler();
+// Connect database
+connectDB();
+initFirebase();
 
+// Only listen on port if not running on Vercel serverless
+if (!process.env.VERCEL) {
+  startDeadlineScheduler();
   app.listen(PORT, () => {
     console.log(`SPMS Server running on port ${PORT}`);
   });
-};
+}
 
-startServer();
+export default app;
