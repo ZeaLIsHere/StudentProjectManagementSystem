@@ -114,18 +114,35 @@ const claimProject = asyncHandler(async (req, res) => {
   }
 
   if (project.status !== PROJECT_STATUS.OPEN) {
-    throw new ApiError(400, 'Proyek sudah diklaim atau tidak tersedia');
+    throw new ApiError(400, 'Proyek sudah tidak tersedia atau telah ditutup');
   }
 
-  if (project.claimedBy) {
-    throw new ApiError(400, 'Proyek sudah diklaim oleh kelompok lain');
+  // Cek apakah mahasiswa ketua ini sudah mengklaim topik proyek ini sebelumnya
+  const existingClaim = await Project.findOne({
+    title: project.title,
+    owner: project.owner,
+    claimedBy: req.user.userId,
+    status: PROJECT_STATUS.ACTIVE,
+  });
+
+  if (existingClaim) {
+    throw new ApiError(400, 'Anda sudah mengklaim topik proyek ini sebelumnya');
   }
 
-  project.claimedBy = req.user.userId;
-  project.claimedAt = new Date();
-  project.status = PROJECT_STATUS.ACTIVE;
-  project.members = [req.user.userId];
-  await project.save();
+  // Buat salinan (clone) proyek untuk kelompok ini
+  const claimedProject = await Project.create({
+    title: project.title,
+    description: project.description,
+    owner: project.owner,
+    maxMembers: project.maxMembers,
+    startDate: project.startDate,
+    endDate: project.endDate,
+    status: PROJECT_STATUS.ACTIVE,
+    claimedBy: req.user.userId,
+    claimedAt: new Date(),
+    members: [req.user.userId],
+    assistants: project.assistants || [],
+  });
 
   const claimer = await User.findById(req.user.userId);
 
@@ -135,7 +152,7 @@ const claimProject = asyncHandler(async (req, res) => {
     type: NOTIFICATION_TYPE.PROJECT_CLAIMED,
     title: 'Proyek Diklaim',
     message: `${claimer.fullName} telah mengklaim proyek "${project.title}"`,
-    relatedProject: project._id,
+    relatedProject: claimedProject._id,
   });
 
   const owner = await User.findById(project.owner);
@@ -147,7 +164,7 @@ const claimProject = asyncHandler(async (req, res) => {
     );
   }
 
-  const populated = await Project.findById(project._id)
+  const populated = await Project.findById(claimedProject._id)
     .populate('owner', 'fullName email')
     .populate('claimedBy', 'fullName email')
     .populate('members', 'fullName email avatar role nim');

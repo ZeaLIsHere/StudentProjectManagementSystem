@@ -112,7 +112,14 @@ export default function ProjectsPage() {
                   <span>{p.members?.length || 0}/{p.maxMembers}</span>
                 </div>
               </div>
-              {p.owner && <p className="text-xs text-slate-400 mt-3 pt-3 border-t border-slate-100">Dosen: {p.owner.fullName}</p>}
+              {p.owner && (
+                <div className="mt-3 pt-3 border-t border-slate-100 flex flex-col gap-1">
+                  <p className="text-xs text-slate-400">Dosen: {p.owner.fullName}</p>
+                  {p.claimedBy && (
+                    <p className="text-xs text-slate-500 font-medium">Ketua Kelompok: {p.claimedBy.fullName}</p>
+                  )}
+                </div>
+              )}
               {activeTab === 'open' && isKetua && (
                 <button onClick={(e) => { e.stopPropagation(); setClaimTarget(p); }} className="mt-4 w-full py-2.5 bg-slate-900 text-white text-sm font-medium rounded-lg hover:bg-slate-800 transition-colors cursor-pointer shadow-sm">Klaim Proyek</button>
               )}
