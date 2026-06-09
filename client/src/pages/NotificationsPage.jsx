@@ -1,28 +1,50 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../api/axiosInstance.js';
 import { formatRelative } from '../utils/formatDate.js';
-import { IconBell } from '../components/common/Icons.jsx';
 import LoadingSpinner from '../components/common/LoadingSpinner.jsx';
 import EmptyState from '../components/common/EmptyState.jsx';
 import toast from 'react-hot-toast';
 
 const TYPE_STYLES = {
+  taskAssigned: { bg: 'bg-blue-50', ring: 'ring-blue-200/60', text: 'text-blue-600', badge: 'bg-blue-100 text-blue-700' },
+  taskSubmitted: { bg: 'bg-indigo-50', ring: 'ring-indigo-200/60', text: 'text-indigo-600', badge: 'bg-indigo-100 text-indigo-700' },
+  taskComment: { bg: 'bg-slate-50', ring: 'ring-slate-200/60', text: 'text-slate-600', badge: 'bg-slate-100 text-slate-700' },
   highPriorityTask: { bg: 'bg-red-50', ring: 'ring-red-200/60', text: 'text-red-600', badge: 'bg-red-100 text-red-700' },
   taskRevision: { bg: 'bg-amber-50', ring: 'ring-amber-200/60', text: 'text-amber-600', badge: 'bg-amber-100 text-amber-700' },
   deadlineReminder: { bg: 'bg-orange-50', ring: 'ring-orange-200/60', text: 'text-orange-600', badge: 'bg-orange-100 text-orange-700' },
+  deadline: { bg: 'bg-orange-50', ring: 'ring-orange-200/60', text: 'text-orange-600', badge: 'bg-orange-100 text-orange-700' },
   taskApproved: { bg: 'bg-emerald-50', ring: 'ring-emerald-200/60', text: 'text-emerald-600', badge: 'bg-emerald-100 text-emerald-700' },
   asistenInvite: { bg: 'bg-violet-50', ring: 'ring-violet-200/60', text: 'text-violet-600', badge: 'bg-violet-100 text-violet-700' },
+  projectClaimed: { bg: 'bg-cyan-50', ring: 'ring-cyan-200/60', text: 'text-cyan-600', badge: 'bg-cyan-100 text-cyan-700' },
 };
 
 const TYPE_LABELS = {
+  taskAssigned: 'Task Baru',
+  taskSubmitted: 'Disubmit',
+  taskComment: 'Komentar',
   highPriorityTask: 'Prioritas Tinggi',
   taskRevision: 'Revisi',
-  deadlineReminder: 'Deadline',
+  deadlineReminder: 'Deadline Proyek',
+  deadline: 'Deadline Task',
   taskApproved: 'Disetujui',
   asistenInvite: 'Undangan',
+  projectClaimed: 'Proyek Diklaim',
+};
+
+const getNotificationLink = (notification) => {
+  if (notification.type === 'asistenInvite') return '/invitations';
+  if (notification.relatedTask && notification.relatedProject) {
+    return `/kanban/${notification.relatedProject._id || notification.relatedProject}`;
+  }
+  if (notification.relatedProject) {
+    return `/projects/${notification.relatedProject._id || notification.relatedProject}`;
+  }
+  return null;
 };
 
 export default function NotificationsPage() {
+  const navigate = useNavigate();
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -43,11 +65,16 @@ export default function NotificationsPage() {
     } catch {}
   };
 
-  const handleMarkRead = async (id) => {
-    try {
-      await api.put(`/notifications/${id}/read`);
-      setNotifications((prev) => prev.map((n) => n._id === id ? { ...n, isRead: true } : n));
-    } catch {}
+  const handleClick = async (notification) => {
+    if (!notification.isRead) {
+      try {
+        await api.put(`/notifications/${notification._id}/read`);
+        setNotifications((prev) => prev.map((n) => n._id === notification._id ? { ...n, isRead: true } : n));
+      } catch {}
+    }
+
+    const link = getNotificationLink(notification);
+    if (link) navigate(link);
   };
 
   if (loading) return <LoadingSpinner />;
@@ -76,9 +103,14 @@ export default function NotificationsPage() {
             const avatarBg = !n.isRead ? (typeStyle?.bg || 'bg-blue-50') : 'bg-slate-100';
             const avatarRing = !n.isRead ? (typeStyle?.ring || 'ring-blue-200/60') : 'ring-slate-200/60';
             const avatarText = !n.isRead ? (typeStyle?.text || 'text-blue-600') : 'text-slate-500';
+            const hasLink = !!getNotificationLink(n);
 
             return (
-              <div key={n._id} onClick={() => !n.isRead && handleMarkRead(n._id)} className={`bg-white rounded-xl border p-4 cursor-pointer transition-all duration-150 hover:shadow-sm ${n.isRead ? 'border-slate-200/80' : 'border-blue-200 ring-1 ring-blue-100'}`}>
+              <div
+                key={n._id}
+                onClick={() => handleClick(n)}
+                className={`bg-white rounded-xl border p-4 transition-all duration-150 hover:shadow-sm ${hasLink ? 'cursor-pointer' : 'cursor-default'} ${n.isRead ? 'border-slate-200/80' : 'border-blue-200 ring-1 ring-blue-100'}`}
+              >
                 <div className="flex items-start gap-3">
                   <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ring-2 ${avatarBg} ${avatarRing}`}>
                     <span className={`text-xs font-semibold ${avatarText}`}>{n.sender?.fullName?.charAt(0)?.toUpperCase()}</span>
@@ -92,6 +124,7 @@ export default function NotificationsPage() {
                     </div>
                     <p className="text-sm text-slate-500 mt-0.5">{n.message}</p>
                     <p className="text-[11px] text-slate-400 mt-1.5 font-medium">{formatRelative(n.createdAt)}</p>
+                    {hasLink && <p className="text-[10px] text-blue-500 mt-1 font-medium">Klik untuk melihat →</p>}
                   </div>
                   {!n.isRead && <span className="w-2 h-2 bg-blue-500 rounded-full shrink-0 mt-2" />}
                 </div>

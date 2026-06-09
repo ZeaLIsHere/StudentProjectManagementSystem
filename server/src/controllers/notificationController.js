@@ -6,6 +6,8 @@ import asyncHandler from '../utils/asyncHandler.js';
 const getNotifications = asyncHandler(async (req, res) => {
   const notifications = await Notification.find({ recipient: req.user.userId })
     .populate('sender', 'fullName avatar')
+    .populate('relatedProject', '_id title')
+    .populate('relatedTask', '_id title')
     .sort({ createdAt: -1 })
     .limit(50);
 

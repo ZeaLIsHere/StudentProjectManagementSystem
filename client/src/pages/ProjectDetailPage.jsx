@@ -6,6 +6,7 @@ import { ROLES, STATUS_COLORS, ROLE_LABELS } from '../utils/constants.js';
 import { formatDate } from '../utils/formatDate.js';
 import { IconArrowLeft, IconClipboard, IconTrendingUp, IconPlus, IconUsers, IconX, IconEye, IconShield } from '../components/common/Icons.jsx';
 import Modal from '../components/common/Modal.jsx';
+import ConfirmDialog from '../components/common/ConfirmDialog.jsx';
 import LoadingSpinner from '../components/common/LoadingSpinner.jsx';
 import toast from 'react-hot-toast';
 
@@ -21,6 +22,9 @@ export default function ProjectDetailPage() {
   const [myAssistants, setMyAssistants] = useState([]);
   const [selectedAssistant, setSelectedAssistant] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [showEditProject, setShowEditProject] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [editForm, setEditForm] = useState({ title: '', description: '', maxMembers: 5, startDate: '', endDate: '', status: '' });
 
   const fetchProject = async () => {
     try {
@@ -93,6 +97,43 @@ export default function ProjectDetailPage() {
     } catch (err) { toast.error(err.response?.data?.message || 'Gagal menghapus asisten'); }
   };
 
+  const openEditProject = () => {
+    setEditForm({
+      title: project.title,
+      description: project.description,
+      maxMembers: project.maxMembers,
+      startDate: project.startDate?.split('T')[0] || '',
+      endDate: project.endDate?.split('T')[0] || '',
+      status: project.status,
+    });
+    setShowEditProject(true);
+  };
+
+  const handleUpdateProject = async (e) => {
+    e.preventDefault();
+    setSubmitting(true);
+    try {
+      const res = await api.put(`/projects/${id}`, editForm);
+      setProject(res.data.data.project);
+      toast.success('Proyek berhasil diperbarui');
+      setShowEditProject(false);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Gagal memperbarui proyek');
+    } finally { setSubmitting(false); }
+  };
+
+  const handleDeleteProject = async () => {
+    try {
+      await api.delete(`/projects/${id}`);
+      toast.success('Proyek berhasil dihapus');
+      navigate('/projects');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Gagal menghapus proyek');
+    }
+  };
+
+  const canEditProject = (isOwner && isDosen) || isAdmin;
+
   if (loading) return <LoadingSpinner />;
   if (!project) return null;
 
@@ -109,7 +150,15 @@ export default function ProjectDetailPage() {
             <h1 className="text-xl font-bold text-slate-900 tracking-tight">{project.title}</h1>
             <p className="text-sm text-slate-400 mt-2 leading-relaxed max-w-2xl">{project.description}</p>
           </div>
-          <span className="text-[11px] font-semibold px-2.5 py-1 rounded-md text-white uppercase tracking-wider shrink-0 ml-4" style={{ backgroundColor: STATUS_COLORS[project.status] }}>{project.status}</span>
+          <div className="flex items-center gap-2 shrink-0 ml-4">
+            <span className="text-[11px] font-semibold px-2.5 py-1 rounded-md text-white uppercase tracking-wider" style={{ backgroundColor: STATUS_COLORS[project.status] }}>{project.status}</span>
+            {canEditProject && (
+              <>
+                <button onClick={openEditProject} className="px-3 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 cursor-pointer">Edit</button>
+                <button onClick={() => setShowDeleteConfirm(true)} className="px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 cursor-pointer">Hapus</button>
+              </>
+            )}
+          </div>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
           <div className="p-3 bg-slate-50 rounded-lg">
@@ -222,6 +271,53 @@ export default function ProjectDetailPage() {
           ))}
         </div>
       </div>
+
+      <Modal isOpen={showEditProject} onClose={() => setShowEditProject(false)} title="Edit Proyek">
+        <form onSubmit={handleUpdateProject} className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Judul</label>
+            <input type="text" value={editForm.title} onChange={(e) => setEditForm({ ...editForm, title: e.target.value })} required className="w-full px-3.5 py-2.5 border border-slate-200 rounded-lg outline-none text-sm" />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Deskripsi</label>
+            <textarea value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} rows={3} required className="w-full px-3.5 py-2.5 border border-slate-200 rounded-lg outline-none text-sm resize-none" />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Mulai</label>
+              <input type="date" value={editForm.startDate} onChange={(e) => setEditForm({ ...editForm, startDate: e.target.value })} required className="w-full px-3.5 py-2.5 border border-slate-200 rounded-lg outline-none text-sm" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Selesai</label>
+              <input type="date" value={editForm.endDate} onChange={(e) => setEditForm({ ...editForm, endDate: e.target.value })} required className="w-full px-3.5 py-2.5 border border-slate-200 rounded-lg outline-none text-sm" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Max Anggota</label>
+              <input type="number" min={2} value={editForm.maxMembers} onChange={(e) => setEditForm({ ...editForm, maxMembers: parseInt(e.target.value) || 2 })} className="w-full px-3.5 py-2.5 border border-slate-200 rounded-lg outline-none text-sm" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Status</label>
+              <select value={editForm.status} onChange={(e) => setEditForm({ ...editForm, status: e.target.value })} className="w-full px-3.5 py-2.5 border border-slate-200 rounded-lg outline-none text-sm bg-white">
+                <option value="open">Open</option>
+                <option value="active">Active</option>
+                <option value="completed">Completed</option>
+                <option value="archived">Archived</option>
+              </select>
+            </div>
+          </div>
+          <button type="submit" disabled={submitting} className="w-full py-2.5 bg-slate-900 text-white text-sm font-medium rounded-lg hover:bg-slate-800 disabled:opacity-50 cursor-pointer">{submitting ? 'Menyimpan...' : 'Simpan Perubahan'}</button>
+        </form>
+      </Modal>
+
+      <ConfirmDialog
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={handleDeleteProject}
+        title="Hapus Proyek"
+        message={`Apakah Anda yakin ingin menghapus proyek "${project.title}"? Semua task terkait juga akan dihapus.`}
+      />
 
       {/* Add Member Modal - NIM based */}
       <Modal isOpen={showAddMember} onClose={() => setShowAddMember(false)} title="Tambah Anggota">

@@ -69,12 +69,7 @@ export default function ProfilePage() {
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="w-full px-3.5 py-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-slate-900 focus:border-slate-900 outline-none text-sm text-slate-800 transition-shadow" />
           </div>
 
-          {!showPasswordSection ? (
-            <button type="button" onClick={() => setShowPasswordSection(true)} className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-slate-800 transition-colors cursor-pointer">
-              <IconLock size={14} />
-              <span>Ubah Password</span>
-            </button>
-          ) : (
+          {showPasswordSection && (
             <div className="space-y-4 pt-4 border-t border-slate-100">
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Ubah Password</p>
               <div>
@@ -93,7 +88,19 @@ export default function ProfilePage() {
             </div>
           )}
 
-          <button type="submit" disabled={submitting} className="px-6 py-2.5 bg-slate-900 text-white text-sm font-medium rounded-lg hover:bg-slate-800 disabled:opacity-50 transition-colors cursor-pointer shadow-sm">{submitting ? 'Menyimpan...' : 'Simpan Perubahan'}</button>
+          <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 pt-6 mt-2 border-t border-slate-100">
+            {!showPasswordSection ? (
+              <button type="button" onClick={() => setShowPasswordSection(true)} className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors cursor-pointer">
+                <IconLock size={14} />
+                <span>Ubah Password</span>
+              </button>
+            ) : (
+              <span className="hidden sm:block" />
+            )}
+            <button type="submit" disabled={submitting} className="w-full sm:w-auto sm:ml-auto px-6 py-2.5 bg-slate-900 text-white text-sm font-medium rounded-lg hover:bg-slate-800 disabled:opacity-50 transition-colors cursor-pointer shadow-sm">
+              {submitting ? 'Menyimpan...' : 'Simpan Perubahan'}
+            </button>
+          </div>
         </form>
       </div>
     </div>

@@ -1,6 +1,7 @@
 import Project from '../models/Project.js';
+import Task from '../models/Task.js';
 import Notification from '../models/Notification.js';
-import { PROJECT_STATUS, NOTIFICATION_TYPE } from '../utils/constants.js';
+import { PROJECT_STATUS, TASK_STATUS, NOTIFICATION_TYPE } from '../utils/constants.js';
 
 const checkDeadlines = async () => {
   try {
@@ -40,6 +41,36 @@ const checkDeadlines = async () => {
           relatedProject: project._id,
         });
       }
+    }
+    const twoDaysAhead = new Date();
+    twoDaysAhead.setDate(twoDaysAhead.getDate() + 2);
+
+    const upcomingTasks = await Task.find({
+      dueDate: { $lte: twoDaysAhead, $gte: now },
+      status: { $ne: TASK_STATUS.DONE },
+      assignee: { $ne: null },
+    }).populate('project', 'title owner');
+
+    for (const task of upcomingTasks) {
+      const existingTaskReminder = await Notification.findOne({
+        relatedTask: task._id,
+        type: NOTIFICATION_TYPE.DEADLINE,
+        createdAt: { $gte: new Date(now.getTime() - 24 * 60 * 60 * 1000) },
+      });
+
+      if (existingTaskReminder) continue;
+
+      const daysLeft = Math.ceil((task.dueDate - now) / (1000 * 60 * 60 * 24));
+
+      await Notification.create({
+        recipient: task.assignee,
+        sender: task.project?.owner || task.reporter,
+        type: NOTIFICATION_TYPE.DEADLINE,
+        title: 'Pengingat Deadline Task',
+        message: `Task "${task.title}" jatuh tempo dalam ${daysLeft} hari`,
+        relatedProject: task.project?._id || task.project,
+        relatedTask: task._id,
+      });
     }
   } catch (error) {
     console.error('Deadline scheduler error:', error.message);

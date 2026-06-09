@@ -2,7 +2,8 @@ import Task from '../models/Task.js';
 import Project from '../models/Project.js';
 import ApiError from '../utils/ApiError.js';
 import asyncHandler from '../utils/asyncHandler.js';
-import { ROLES } from '../utils/constants.js';
+import { ROLES, TASK_STATUS } from '../utils/constants.js';
+import { assertProjectAccess } from '../utils/projectAccess.js';
 
 const bulkUpdateTasks = asyncHandler(async (req, res) => {
   const { updates } = req.body;
@@ -22,11 +23,10 @@ const bulkUpdateTasks = asyncHandler(async (req, res) => {
   }
 
   const { userId, role } = req.user;
-  const isMember = project.members.some((m) => m.toString() === userId);
-  const isOwner = project.owner.toString() === userId;
-  const isAdmin = role === ROLES.ADMIN;
+  const access = assertProjectAccess(project, userId, role);
+  const { isOwner, isMember, isClaimedBy, isAssistant, isAdmin } = access;
 
-  if (!isMember && !isOwner && !isAdmin) {
+  if (!isMember && !isOwner && !isClaimedBy && !isAssistant && !isAdmin) {
     throw new ApiError(403, 'Anda tidak memiliki akses ke proyek ini');
   }
 
@@ -43,7 +43,10 @@ const bulkUpdateTasks = asyncHandler(async (req, res) => {
       const updateData = {};
 
       if (status !== undefined) {
-        // Enforce that regular members cannot drag any task directly to done
+        if (status === TASK_STATUS.REVIEW) {
+          throw new ApiError(400, 'Status Review hanya dapat diatur melalui submit task');
+        }
+
         if (status === 'done' && !isKetua && !isAdmin) {
           throw new ApiError(403, 'Hanya ketua kelompok yang dapat menyetujui atau menyelesaikan task');
         }
@@ -57,8 +60,7 @@ const bulkUpdateTasks = asyncHandler(async (req, res) => {
           }
         } else {
           updateData.completedAt = null;
-          if (status === 'todo' || status === 'in_progress') {
-            // Reset approval if moved back
+          if (status === TASK_STATUS.TODO || status === TASK_STATUS.IN_PROGRESS) {
             updateData.approvalStatus = null;
             updateData.revisionComment = '';
           }

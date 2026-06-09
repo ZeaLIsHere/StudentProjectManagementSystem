@@ -7,6 +7,10 @@ import asyncHandler from '../utils/asyncHandler.js';
 import { ROLES, TASK_STATUS, TASK_PRIORITY, APPROVAL_STATUS, NOTIFICATION_TYPE } from '../utils/constants.js';
 import { sendPushNotification } from '../services/fcmService.js';
 
+const isProjectMember = (project, userId) =>
+  project.members.some((m) => m.toString() === userId) ||
+  project.claimedBy?.toString() === userId;
+
 const getTasks = asyncHandler(async (req, res) => {
   const { projectId } = req.params;
 
@@ -18,10 +22,11 @@ const getTasks = asyncHandler(async (req, res) => {
   const { userId, role } = req.user;
   const isOwner = project.owner.toString() === userId;
   const isMember = project.members.some((m) => m.toString() === userId);
+  const isClaimedBy = project.claimedBy?.toString() === userId;
   const isAssistant = project.assistants?.some((a) => a.toString() === userId);
   const isAdmin = role === ROLES.ADMIN;
 
-  if (!isOwner && !isMember && !isAssistant && !isAdmin) {
+  if (!isOwner && !isMember && !isClaimedBy && !isAssistant && !isAdmin) {
     throw new ApiError(403, 'Anda tidak memiliki akses ke proyek ini');
   }
 
@@ -57,6 +62,14 @@ const createTask = asyncHandler(async (req, res) => {
   }
 
   const { title, description, assignee, priority, points, dueDate } = req.body;
+
+  if (!assignee) {
+    throw new ApiError(400, 'Assignee wajib dipilih');
+  }
+
+  if (!isProjectMember(project, assignee)) {
+    throw new ApiError(400, 'Assignee harus anggota proyek ini');
+  }
 
   const maxPosition = await Task.findOne({ project: projectId, status: TASK_STATUS.TODO })
     .sort({ position: -1 })
@@ -142,7 +155,18 @@ const updateTask = asyncHandler(async (req, res) => {
 
   if (title !== undefined) task.title = title;
   if (description !== undefined) task.description = description;
-  if (assignee !== undefined) task.assignee = assignee;
+  if (assignee !== undefined) {
+    if (!isClaimedBy && !isAdmin) {
+      throw new ApiError(403, 'Hanya ketua kelompok yang dapat mengubah assignee');
+    }
+    if (!assignee) {
+      throw new ApiError(400, 'Assignee wajib dipilih');
+    }
+    if (!isProjectMember(project, assignee)) {
+      throw new ApiError(400, 'Assignee harus anggota proyek ini');
+    }
+    task.assignee = assignee;
+  }
   if (priority !== undefined) task.priority = priority;
   if (points !== undefined) task.points = points;
   if (dueDate !== undefined) task.dueDate = dueDate;
@@ -197,17 +221,29 @@ const deleteTask = asyncHandler(async (req, res) => {
   });
 });
 
-const submitTask = asyncHandler(async (req, res) => {
+const populateTask = (taskId) =>
+  Task.findById(taskId)
+    .populate('assignee', 'fullName email avatar')
+    .populate('reporter', 'fullName email avatar')
+    .populate('reviewedBy', 'fullName email')
+    .populate('attachments.uploadedBy', 'fullName email')
+    .populate('comments.author', 'fullName email avatar');
+
+const uploadTaskAttachment = asyncHandler(async (req, res) => {
   const task = await Task.findById(req.params.id);
   if (!task) throw new ApiError(404, 'Task tidak ditemukan');
 
   const { userId } = req.user;
   if (task.assignee?.toString() !== userId) {
-    throw new ApiError(403, 'Hanya assignee yang bisa mengunggah hasil task');
+    throw new ApiError(403, 'Hanya assignee yang bisa mengunggah file');
   }
 
   if (!req.file) {
     throw new ApiError(400, 'File wajib diunggah');
+  }
+
+  if (task.approvalStatus === APPROVAL_STATUS.PENDING && task.status === TASK_STATUS.REVIEW) {
+    throw new ApiError(400, 'Task sedang menunggu review. Tidak dapat menambah file.');
   }
 
   task.attachments.push({
@@ -218,8 +254,73 @@ const submitTask = asyncHandler(async (req, res) => {
     uploadedAt: new Date(),
   });
 
+  if (task.status === TASK_STATUS.TODO || task.approvalStatus === APPROVAL_STATUS.REVISION) {
+    task.status = TASK_STATUS.IN_PROGRESS;
+    if (task.approvalStatus === APPROVAL_STATUS.REVISION) {
+      task.approvalStatus = null;
+    }
+  }
+
+  await task.save();
+
+  const populated = await populateTask(task._id);
+
+  res.json({
+    success: true,
+    message: 'File berhasil diunggah',
+    data: { task: populated },
+  });
+});
+
+const deleteTaskAttachment = asyncHandler(async (req, res) => {
+  const task = await Task.findById(req.params.id);
+  if (!task) throw new ApiError(404, 'Task tidak ditemukan');
+
+  const { userId } = req.user;
+  if (task.assignee?.toString() !== userId) {
+    throw new ApiError(403, 'Hanya assignee yang bisa menghapus file');
+  }
+
+  if (task.approvalStatus === APPROVAL_STATUS.PENDING && task.status === TASK_STATUS.REVIEW) {
+    throw new ApiError(400, 'Task sedang menunggu review. File tidak dapat dihapus.');
+  }
+
+  const attachment = task.attachments.id(req.params.attachmentId);
+  if (!attachment) {
+    throw new ApiError(404, 'File tidak ditemukan');
+  }
+
+  attachment.deleteOne();
+  await task.save();
+
+  const populated = await populateTask(task._id);
+
+  res.json({
+    success: true,
+    message: 'File berhasil dihapus',
+    data: { task: populated },
+  });
+});
+
+const submitTask = asyncHandler(async (req, res) => {
+  const task = await Task.findById(req.params.id);
+  if (!task) throw new ApiError(404, 'Task tidak ditemukan');
+
+  const { userId } = req.user;
+  if (task.assignee?.toString() !== userId) {
+    throw new ApiError(403, 'Hanya assignee yang bisa submit task');
+  }
+
+  if (!task.attachments || task.attachments.length === 0) {
+    throw new ApiError(400, 'Unggah file terlebih dahulu sebelum submit');
+  }
+
+  if (task.approvalStatus === APPROVAL_STATUS.PENDING && task.status === TASK_STATUS.REVIEW) {
+    throw new ApiError(400, 'Task sudah disubmit dan menunggu review');
+  }
+
   const project = await Project.findById(task.project);
-  const isKetua = project?.claimedBy && project.claimedBy.toString() === userId;
+  const isKetua = project?.claimedBy?.toString() === userId;
 
   if (isKetua) {
     task.approvalStatus = APPROVAL_STATUS.APPROVED;
@@ -233,30 +334,32 @@ const submitTask = asyncHandler(async (req, res) => {
 
   await task.save();
 
-  // Notify ketua kelompok if submitted by a regular member
   if (!isKetua && project?.claimedBy) {
     const submitter = await User.findById(userId);
+    const notifTitle = 'Task Disubmit';
+    const notifMsg = `${submitter.fullName} mengsubmit hasil task "${task.title}" untuk review`;
+
     await Notification.create({
       recipient: project.claimedBy,
       sender: userId,
       type: NOTIFICATION_TYPE.TASK_SUBMITTED,
-      title: 'Task Disubmit',
-      message: `${submitter.fullName} mengunggah hasil task "${task.title}"`,
+      title: notifTitle,
+      message: notifMsg,
       relatedProject: task.project,
       relatedTask: task._id,
     });
+
+    const ketua = await User.findById(project.claimedBy);
+    if (ketua?.fcmToken) {
+      await sendPushNotification(ketua.fcmToken, notifTitle, notifMsg);
+    }
   }
 
-  const populated = await Task.findById(task._id)
-    .populate('assignee', 'fullName email avatar')
-    .populate('reporter', 'fullName email avatar')
-    .populate('reviewedBy', 'fullName email')
-    .populate('attachments.uploadedBy', 'fullName email')
-    .populate('comments.author', 'fullName email avatar');
+  const populated = await populateTask(task._id);
 
   res.json({
     success: true,
-    message: 'File berhasil diunggah',
+    message: isKetua ? 'Task selesai' : 'Task berhasil disubmit untuk review',
     data: { task: populated },
   });
 });
@@ -272,9 +375,12 @@ const reviewTask = asyncHandler(async (req, res) => {
     throw new ApiError(403, 'Hanya ketua kelompok yang bisa review task');
   }
 
-  // Ketua cannot review their own tasks
   if (task.assignee?.toString() === userId) {
     throw new ApiError(400, 'Anda tidak bisa mereview task sendiri');
+  }
+
+  if (task.status !== TASK_STATUS.REVIEW || task.approvalStatus !== APPROVAL_STATUS.PENDING) {
+    throw new ApiError(400, 'Task tidak dalam status menunggu review');
   }
 
   const { action, comment } = req.body;
@@ -318,6 +424,11 @@ const reviewTask = asyncHandler(async (req, res) => {
       relatedProject: task.project,
       relatedTask: task._id,
     });
+
+    const assigneeUser = await User.findById(task.assignee);
+    if (assigneeUser?.fcmToken) {
+      await sendPushNotification(assigneeUser.fcmToken, notifTitle, notifMsg);
+    }
   }
 
   const populated = await Task.findById(task._id)
@@ -386,4 +497,4 @@ const addComment = asyncHandler(async (req, res) => {
   });
 });
 
-export { getTasks, createTask, updateTask, deleteTask, submitTask, reviewTask, addComment };
+export { getTasks, createTask, updateTask, deleteTask, uploadTaskAttachment, deleteTaskAttachment, submitTask, reviewTask, addComment };

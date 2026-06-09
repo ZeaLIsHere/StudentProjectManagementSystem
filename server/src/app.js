@@ -15,6 +15,7 @@ import kanbanRoutes from './routes/kanbanRoutes.js';
 import heatmapRoutes from './routes/heatmapRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import userRoutes from './routes/userRoutes.js';
+import dashboardRoutes from './routes/dashboardRoutes.js';
 
 import connectDB from './config/db.js';
 
@@ -58,6 +59,7 @@ app.use('/api/kanban', kanbanRoutes);
 app.use('/api/heatmap', heatmapRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 app.use(errorHandler);
 

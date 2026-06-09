@@ -36,6 +36,14 @@ export default function AdminUsersPage() {
     } catch (err) { toast.error(err.response?.data?.message || 'Gagal'); }
   };
 
+  const handleRoleChange = async (id, newRole) => {
+    try {
+      const res = await api.put(`/users/${id}/role`, { role: newRole });
+      setUsers((prev) => prev.map((u) => u._id === id ? res.data.data.user : u));
+      toast.success('Role berhasil diubah');
+    } catch (err) { toast.error(err.response?.data?.message || 'Gagal mengubah role'); }
+  };
+
   if (loading) return <LoadingSpinner />;
 
   return (
@@ -69,7 +77,17 @@ export default function AdminUsersPage() {
                 <tr key={u._id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/50 transition-colors">
                   <td className="px-5 py-3.5 font-medium text-slate-800">{u.fullName}</td>
                   <td className="px-5 py-3.5 text-slate-500">{u.email}</td>
-                  <td className="px-5 py-3.5"><span className="text-[11px] font-semibold px-2 py-1 bg-slate-100 rounded-md text-slate-600 uppercase tracking-wider">{ROLE_LABELS[u.role]}</span></td>
+                  <td className="px-5 py-3.5">
+                    <select
+                      value={u.role}
+                      onChange={(e) => handleRoleChange(u._id, e.target.value)}
+                      className="text-[11px] font-semibold px-2 py-1 bg-slate-100 rounded-md text-slate-600 uppercase tracking-wider border-0 outline-none cursor-pointer"
+                    >
+                      {Object.entries(ROLE_LABELS).map(([val, label]) => (
+                        <option key={val} value={val}>{label}</option>
+                      ))}
+                    </select>
+                  </td>
                   <td className="px-5 py-3.5"><span className={`text-[11px] font-semibold px-2 py-1 rounded-md ${u.isActive ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'}`}>{u.isActive ? 'Aktif' : 'Nonaktif'}</span></td>
                   <td className="px-5 py-3.5">
                     <div className="flex gap-3">
