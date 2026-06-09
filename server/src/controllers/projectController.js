@@ -1,4 +1,5 @@
 import Project from '../models/Project.js';
+import Task from '../models/Task.js';
 import Notification from '../models/Notification.js';
 import User from '../models/User.js';
 import ApiError from '../utils/ApiError.js';
@@ -213,6 +214,8 @@ const deleteProject = asyncHandler(async (req, res) => {
     throw new ApiError(403, 'Anda tidak memiliki izin untuk menghapus proyek ini');
   }
 
+  await Task.deleteMany({ project: project._id });
+  await Notification.deleteMany({ relatedProject: project._id });
   await Project.findByIdAndDelete(req.params.id);
 
   res.json({

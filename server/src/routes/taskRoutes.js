@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { body } from 'express-validator';
-import { getTasks, createTask, updateTask, deleteTask, submitTask, reviewTask, addComment } from '../controllers/taskController.js';
+import { getTasks, createTask, updateTask, deleteTask, uploadTaskAttachment, deleteTaskAttachment, submitTask, reviewTask, addComment } from '../controllers/taskController.js';
 import authMiddleware from '../middleware/authMiddleware.js';
 import validateRequest from '../middleware/validateRequest.js';
 import upload from '../middleware/upload.js';
@@ -13,7 +13,10 @@ router.get('/projects/:projectId/tasks', getTasks);
 
 router.post(
   '/projects/:projectId/tasks',
-  [body('title').trim().notEmpty().withMessage('Judul task wajib diisi')],
+  [
+    body('title').trim().notEmpty().withMessage('Judul task wajib diisi'),
+    body('assignee').notEmpty().withMessage('Assignee wajib dipilih'),
+  ],
   validateRequest,
   createTask
 );
@@ -21,7 +24,9 @@ router.post(
 router.put('/tasks/:id', updateTask);
 router.delete('/tasks/:id', deleteTask);
 
-router.post('/tasks/:id/submit', upload.single('file'), submitTask);
+router.post('/tasks/:id/attachments', upload.single('file'), uploadTaskAttachment);
+router.delete('/tasks/:id/attachments/:attachmentId', deleteTaskAttachment);
+router.post('/tasks/:id/submit', submitTask);
 
 router.put(
   '/tasks/:id/review',
